@@ -110,4 +110,13 @@ final class LaravelGuardRequest implements GuardRequest
     {
         return $this->state;
     }
+
+    /**
+     * The wrapped Illuminate request, for adapter resolvers that inspect
+     * framework-native surfaces (the resolved route, the session, ...).
+     */
+    public function underlying(): Request
+    {
+        return $this->request;
+    }
 }
