@@ -216,7 +216,7 @@ $t->same([], $extra, 'no unexpected headers on plain block (framework cache-cont
 $t->same('text/plain; charset=utf-8', $blocked->headers->get('Content-Type'), 'block response content type explicit');
 $t->same(0, $next->calls, 'downstream not called on block');
 $t->same('ip_security', $hooks[0]['check_name'] ?? null, 'on_block check_name');
-$t->same('IP blacklisted: 192.0.2.66', $hooks[0]['reason'] ?? null, 'on_block reason');
+$t->same('IP not allowed: 192.0.2.66 - IP 192.0.2.66 not in global allowlist/blocklist', $hooks[0]['reason'] ?? null, 'on_block reason');
 $t->same(403, $hooks[0]['status_code'] ?? null, 'on_block status_code');
 $t->same(false, $hooks[0]['passive_mode'] ?? null, 'on_block passive_mode false');
 
@@ -328,7 +328,11 @@ $next = new RecordingNext();
 $passive = $middleware->handle(laravelRequest('/search', '203.0.113.70', 'GET', $attackQuery), $next->next());
 $t->same(200, $passive->getStatusCode(), 'passive mode does not block');
 $t->same(1, $next->calls, 'passive mode hands request to the downstream handler');
-$t->same([], $hooks, 'passive mode fires no on_block from suspicious_activity');
+$t->same(1, count($hooks), 'passive mode fires the inline suspicious_activity on_block hook');
+$t->same('suspicious_activity', $hooks[0]['check_name'] ?? null, 'passive on_block check_name');
+$t->same('Suspicious activity detected: 203.0.113.70', $hooks[0]['reason'] ?? null, 'passive on_block reason');
+$t->same(true, array_key_exists('status_code', $hooks[0]) && $hooks[0]['status_code'] === null, 'passive on_block status_code is null');
+$t->same(true, $hooks[0]['passive_mode'] ?? null, 'passive on_block passive_mode true');
 
 $t->section('fail-closed on engine malfunction (conformance.md)');
 $config = new SecurityConfig(enableRedis: false);
