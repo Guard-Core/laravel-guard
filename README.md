@@ -49,7 +49,28 @@ protected $middleware = [
 ];
 ```
 
-Blocked requests get the engine's block verdict translated exactly (status, body, headers) as an `Illuminate\Http\Response`: `403 Forbidden` for a blacklisted IP, `429 Too many requests` with `Retry-After` for a rate limit hit. Passing requests continue down the stack untouched.
+Blocked requests get the engine's block verdict translated exactly (status, body, headers) as an `Illuminate\Http\Response`: `403 Forbidden` for a blacklisted IP, `429 Too many requests` with `Retry-After` for a rate limit hit.
+
+Pass-through responses are finished by the middleware too: the engine's security headers and CORS verdict headers are merged on top of the handler's response, and the engine's behavioral return rules observe the response status code plus a body prefix bounded by `behaviorMaxResponseBodyInspectBytes` (only while `behaviorScanResponseBody` is on). Per-route configuration attaches through the middleware's route map or a custom resolver:
+
+```php
+use RenzoFranceschini\GuardCore\Routing\RouteConfig;
+use RenzoFranceschini\GuardCoreLaravel\GuardMiddleware;
+
+return new GuardMiddleware(
+    new GuardEngine($config),
+    routes: [
+        '/docs/' => new RouteConfig(enableSuspiciousDetection: false),
+        '/api/' => new RouteConfig(rateLimit: 5, rateLimitWindow: 10),
+    ],
+    // optional: country resolver for RouteConfig geoRateLimits tiers
+    geoRateLimitResolver: $myResolver,
+    // optional: custom resolver receiving the Illuminate request
+    routeResolver: fn (Request $r) => $r->is('admin/*') ? new RouteConfig(bypassedChecks: ['rate_limit']) : null,
+);
+```
+
+`routes` patterns match a path exactly or as a prefix when they end with `/`. Geo rate-limit tiers need a country resolver: pass `geoRateLimitResolver` explicitly, or configure `geoIpHandler` together with `blockedCountries`/`whitelistCountries` (the engine keeps the injected handler only when country lists are set) and the middleware bridges it onto the engine's rate-limit handler automatically.
 
 ## Lifecycle
 

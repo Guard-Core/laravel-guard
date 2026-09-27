@@ -10,6 +10,7 @@ use RenzoFranceschini\GuardCore\Request\GuardRequest;
 use RenzoFranceschini\GuardCore\Request\GuardResponse;
 use RenzoFranceschini\GuardCore\Redis\GuardRedisException;
 use RenzoFranceschini\GuardCore\Redis\RedisHandler;
+use RenzoFranceschini\GuardCore\Routing\RouteConfig;
 use RenzoFranceschini\GuardCoreLaravel\GuardMiddleware;
 use RenzoFranceschini\GuardCoreLaravel\LaravelGuardRequest;
 
@@ -364,6 +365,195 @@ $engine = new GuardEngine($config, new RedisHandler(enableRedis: true, prefix: '
 $middleware = new GuardMiddleware($engine);
 $openPass = $middleware->handle(laravelRequest('/x', '203.0.113.81'), (new RecordingNext())->next());
 $t->same(200, $openPass->getStatusCode(), 'redis down + redis_fail_open=true: construction survives, request passes (bounded fail-open)');
+
+$t->section('pass-through security headers (engine responseHeaders on the way out)');
+$config = new SecurityConfig(enableRedis: false, enablePenetrationDetection: false);
+[$middleware] = makeStack($config);
+$next = new RecordingNext();
+$passed = $middleware->handle(laravelRequest('/page', '203.0.113.110'), $next->next());
+$t->same(200, $passed->getStatusCode(), 'pass-through status preserved');
+$t->same('downstream', $passed->getContent(), 'pass-through body preserved');
+$missing = array_diff_key(array_flip($securityHeaderKeys), $passed->headers->all());
+$t->same([], $missing, 'engine default security headers applied to the pass-through response');
+$extra = array_diff_key($passed->headers->all(), $allowedHeaders);
+$t->same([], $extra, 'pass-through response carries nothing beyond engine headers and framework basics');
+$config = new SecurityConfig(enableRedis: false, enablePenetrationDetection: false, securityHeaders: ['enabled' => false]);
+[$middleware] = makeStack($config);
+$passed = $middleware->handle(laravelRequest('/page', '203.0.113.111'), (new RecordingNext())->next());
+$t->same(true, array_diff_key(array_flip($securityHeaderKeys), $passed->headers->all()) !== [], 'headers disabled: no engine security headers on the pass-through response');
+
+$t->section('pass-through CORS response headers');
+$config = new SecurityConfig(enableRedis: false, enablePenetrationDetection: false, enableCors: true, corsAllowOrigins: ['https://app.test']);
+[$middleware] = makeStack($config);
+$corsReq = laravelRequest('/page', '203.0.113.120', 'GET', '', '', ['Origin' => 'https://app.test']);
+$passed = $middleware->handle($corsReq, (new RecordingNext())->next());
+$t->same(['https://app.test'], $passed->headers->all('Access-Control-Allow-Origin'), 'allowed origin echoed onto the pass-through response');
+$noOrigin = $middleware->handle(laravelRequest('/page', '203.0.113.121'), (new RecordingNext())->next());
+$t->same([], $noOrigin->headers->all('Access-Control-Allow-Origin'), 'no Origin header: no CORS headers on the pass-through response');
+$disallowed = $middleware->handle(laravelRequest('/page', '203.0.113.122', 'GET', '', '', ['Origin' => 'https://evil.test']), (new RecordingNext())->next());
+$t->same([], $disallowed->headers->all('Access-Control-Allow-Origin'), 'disallowed origin: no CORS headers on the pass-through response');
+
+$t->section('behavior return rules over the pass-through response');
+$config = new SecurityConfig(
+    enableRedis: false,
+    enablePenetrationDetection: false,
+    globalBehaviorRules: [['rule_type' => 'return_pattern', 'threshold' => 1, 'pattern' => 'status:404', 'action' => 'ban', 'window' => 60]]
+);
+[$middleware] = makeStack($config);
+$recorder = new RecordingNext();
+$recorder->response = new Response('nope', 404);
+$middleware->handle(laravelRequest('/missing', '203.0.113.130'), $recorder->next());
+$middleware->handle(laravelRequest('/missing', '203.0.113.130'), $recorder->next());
+$banned = $middleware->handle(laravelRequest('/missing', '203.0.113.130'), (new RecordingNext())->next());
+$t->same(403, $banned->getStatusCode(), 'status-only return rule banned the ip (threshold trips strictly greater)');
+$t->ok(str_contains($banned->getContent(), 'banned'), 'ban body reports the ban');
+
+$t->section('return rules with body patterns: scan flag and inspect-bytes budget');
+$marker = 'leaked-secret-trailer';
+$baseRules = [['rule_type' => 'return_pattern', 'threshold' => 1, 'pattern' => $marker, 'action' => 'ban', 'window' => 60]];
+$config = new SecurityConfig(
+    enableRedis: false,
+    enablePenetrationDetection: false,
+    behaviorScanResponseBody: true,
+    behaviorMaxResponseBodyInspectBytes: 1024,
+    globalBehaviorRules: $baseRules
+);
+[$middleware] = makeStack($config);
+$recorder = new RecordingNext();
+$recorder->response = new Response(str_repeat('a', 900) . $marker, 200);
+$middleware->handle(laravelRequest('/report', '203.0.113.131'), $recorder->next());
+$middleware->handle(laravelRequest('/report', '203.0.113.131'), $recorder->next());
+$banned = $middleware->handle(laravelRequest('/report', '203.0.113.131'), (new RecordingNext())->next());
+$t->same(403, $banned->getStatusCode(), 'body pattern inside the inspect budget triggered the ban');
+
+$config = new SecurityConfig(
+    enableRedis: false,
+    enablePenetrationDetection: false,
+    behaviorScanResponseBody: true,
+    behaviorMaxResponseBodyInspectBytes: 1024,
+    globalBehaviorRules: $baseRules
+);
+[$middleware] = makeStack($config);
+$recorder = new RecordingNext();
+$recorder->response = new Response(str_repeat('a', 1024) . $marker, 200);
+$passed = $middleware->handle(laravelRequest('/report', '203.0.113.132'), $recorder->next());
+$t->same(200, $passed->getStatusCode(), 'marker at the budget edge stays unflagged and unmodified');
+$t->same(200, $middleware->handle(laravelRequest('/report', '203.0.113.132'), (new RecordingNext())->next())->getStatusCode(), 'pattern beyond the inspect budget never triggers');
+
+$config = new SecurityConfig(
+    enableRedis: false,
+    enablePenetrationDetection: false,
+    behaviorScanResponseBody: true,
+    behaviorMaxResponseBodyInspectBytes: 1024,
+    globalBehaviorRules: $baseRules
+);
+[$middleware] = makeStack($config);
+$bigBody = str_repeat('a', 5000) . $marker;
+$recorder = new RecordingNext();
+$recorder->response = new Response($bigBody, 200);
+$passed = $middleware->handle(laravelRequest('/report', '203.0.113.133'), $recorder->next());
+$t->same(strlen($bigBody), strlen((string) $passed->getContent()), 'large pass-through body not truncated by the capture');
+$t->throws(
+    \InvalidArgumentException::class,
+    static function () use ($baseRules): void {
+        new SecurityConfig(enableRedis: false, globalBehaviorRules: $baseRules, behaviorScanResponseBody: false);
+    },
+    'body pattern with scan off rejected at config construction'
+);
+
+$t->section('per-route config through the middleware route map');
+$hooks = [];
+$routeConfig = new RouteConfig(enableSuspiciousDetection: false);
+$middleware = new GuardMiddleware(
+    new GuardEngine(new SecurityConfig(enableRedis: false, onBlock: hookCapture($hooks))),
+    routes: ['/open/' => $routeConfig]
+);
+$open = $middleware->handle(laravelRequest('/open/section', '203.0.113.140', 'GET', $attackQuery), (new RecordingNext())->next());
+$t->same(200, $open->getStatusCode(), 'attack on a route with detection disabled passes');
+$guarded = $middleware->handle(laravelRequest('/search', '203.0.113.140', 'GET', $attackQuery), (new RecordingNext())->next());
+$t->same(400, $guarded->getStatusCode(), 'same attack on an unconfigured route still blocks');
+
+$hooks = [];
+$config = new SecurityConfig(enableRedis: false, onBlock: hookCapture($hooks));
+$routeConfig = new RouteConfig(behaviorRules: [new \RenzoFranceschini\GuardCore\Behavior\BehaviorRule('usage', 1, window: 60, action: 'ban')]);
+$middleware = new GuardMiddleware(new GuardEngine($config), routes: ['/chatty/' => $routeConfig]);
+$middleware->handle(laravelRequest('/chatty/feed', '203.0.113.141'), (new RecordingNext())->next());
+$middleware->handle(laravelRequest('/chatty/feed', '203.0.113.141'), (new RecordingNext())->next());
+$banned = $middleware->handle(laravelRequest('/chatty/feed', '203.0.113.141'), (new RecordingNext())->next());
+$t->same(403, $banned->getStatusCode(), 'route usage rule banned the ip after the threshold');
+
+$seenPath = null;
+$config = new SecurityConfig(enableRedis: false);
+$middleware = new GuardMiddleware(
+    new GuardEngine($config),
+    routeResolver: static function (Request $request) use (&$seenPath): ?RouteConfig {
+        $seenPath = $request->getPathInfo();
+
+        return $request->getPathInfo() === '/dynamic' ? new RouteConfig(enableSuspiciousDetection: false) : null;
+    }
+);
+$dynamic = $middleware->handle(laravelRequest('/dynamic', '203.0.113.142', 'GET', $attackQuery), (new RecordingNext())->next());
+$t->same('/dynamic', $seenPath, 'custom resolver received the raw Illuminate request');
+$t->same(200, $dynamic->getStatusCode(), 'custom resolver route skips detection');
+$static = $middleware->handle(laravelRequest('/search', '203.0.113.143', 'GET', $attackQuery), (new RecordingNext())->next());
+$t->same(400, $static->getStatusCode(), 'custom resolver returning null keeps global enforcement');
+
+$t->section('geo country config through the public adapter surface');
+final class FakeCountryResolver implements \RenzoFranceschini\GuardCore\GeoIp\CountryResolver
+{
+    public function __construct(private readonly ?string $country)
+    {
+    }
+
+    public function getCountry(string $ip): ?string
+    {
+        return $this->country;
+    }
+}
+
+$hooks = [];
+$config = new SecurityConfig(
+    enableRedis: false,
+    enablePenetrationDetection: false,
+    blockedCountries: ['CN'],
+    geoIpHandler: new FakeCountryResolver('CN'),
+    onBlock: hookCapture($hooks)
+);
+[$middleware] = makeStack($config);
+$blockedCountry = $middleware->handle(laravelRequest('/download', '203.0.113.150'), (new RecordingNext())->next());
+$t->same(403, $blockedCountry->getStatusCode(), 'blocked country -> 403 through the adapter');
+$t->same('Forbidden', $blockedCountry->getContent(), 'country block body exact');
+$config = new SecurityConfig(
+    enableRedis: false,
+    enablePenetrationDetection: false,
+    whitelistCountries: ['DE'],
+    geoIpHandler: new FakeCountryResolver('CN')
+);
+[$middleware] = makeStack($config);
+$notAllowed = $middleware->handle(laravelRequest('/download', '203.0.113.151'), (new RecordingNext())->next());
+$t->same(403, $notAllowed->getStatusCode(), 'country outside the allowlist -> 403');
+$config = new SecurityConfig(
+    enableRedis: false,
+    enablePenetrationDetection: false,
+    whitelistCountries: ['DE'],
+    geoIpHandler: new FakeCountryResolver('DE')
+);
+[$middleware] = makeStack($config);
+$allowedCountry = $middleware->handle(laravelRequest('/download', '203.0.113.152'), (new RecordingNext())->next());
+$t->same(200, $allowedCountry->getStatusCode(), 'allowlisted country passes');
+
+$t->section('geo rate-limit tiers via the config geo resolver bridge');
+$config = new SecurityConfig(enableRedis: false, enablePenetrationDetection: false);
+$middleware = new GuardMiddleware(
+    new GuardEngine($config),
+    routes: ['/geo/' => new RouteConfig(geoRateLimits: ['CN' => ['limit' => 1, 'window' => 60]])],
+    geoRateLimitResolver: new FakeCountryResolver('CN')
+);
+$geoReq = laravelRequest('/geo/data', '203.0.113.160');
+$t->same(200, $middleware->handle($geoReq, (new RecordingNext())->next())->getStatusCode(), 'geo tier hit 1 passes');
+$limited = $middleware->handle(laravelRequest('/geo/data', '203.0.113.160'), (new RecordingNext())->next());
+$t->same(429, $limited->getStatusCode(), 'geo tier hit 2 -> 429');
+$t->same(['60'], $limited->headers->all('Retry-After'), 'geo tier Retry-After carries the tier window');
 
 $t->section('integration: shared state over real redis');
 $integration = getenv('REDIS_HOST') !== '0';
