@@ -126,7 +126,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: rennf93/guard-core-php
-          ref: master
+          ref: feat/parity-agent-seam-status-route
           path: core-checkout
           persist-credentials: false
 
@@ -192,7 +192,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: rennf93/guard-core-php
-          ref: master
+          ref: feat/parity-agent-seam-status-route
           path: core-checkout
           persist-credentials: false
 
