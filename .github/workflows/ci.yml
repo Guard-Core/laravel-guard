@@ -38,15 +38,16 @@ jobs:
           persist-credentials: false
 
       # Supply-chain tradeoff, deliberate: this pins a MOVING branch of the
-      # core engine (master), not an immutable ref, because the published
-      # ^4.1.0 floor no longer resolves from Packagist (the v4.1.0 tag was
-      # yanked). The path repository plus the update step below only float
-      # within that constraint.
+      # core engine (feat/parity-agent-seam-status-route, the parity branch
+      # the composer.json constraint aliases), not an immutable ref, because
+      # the published ^4.1.0 floor no longer resolves from Packagist (the
+      # v4.1.0 tag was yanked). The path repository plus the update step
+      # below only float within that constraint.
       - name: Checkout guard-core-php (path repository)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: rennf93/guard-core-php
-          ref: master
+          ref: feat/parity-agent-seam-status-route
           path: core-checkout
           persist-credentials: false
 
@@ -67,7 +68,10 @@ jobs:
           engine = "../guard-core-php/composer.json"
           with open(engine) as f:
               d = json.load(f)
-          d["version"] = "4.3.99"
+          # The adapter constraint is dev-feat/parity-agent-seam-status-route
+          # (aliased v4.3.1): stamp exactly that dev-* version, because a
+          # real x.y.z stamp cannot satisfy a dev-* constraint.
+          d["version"] = "dev-feat/parity-agent-seam-status-route"
           with open(engine, "w") as f:
               json.dump(d, f, indent=4)
               f.write("\n")
@@ -137,7 +141,10 @@ jobs:
           engine = "../guard-core-php/composer.json"
           with open(engine) as f:
               d = json.load(f)
-          d["version"] = "4.3.99"
+          # The adapter constraint is dev-feat/parity-agent-seam-status-route
+          # (aliased v4.3.1): stamp exactly that dev-* version, because a
+          # real x.y.z stamp cannot satisfy a dev-* constraint.
+          d["version"] = "dev-feat/parity-agent-seam-status-route"
           with open(engine, "w") as f:
               json.dump(d, f, indent=4)
               f.write("\n")
@@ -200,7 +207,10 @@ jobs:
           engine = "../guard-core-php/composer.json"
           with open(engine) as f:
               d = json.load(f)
-          d["version"] = "4.3.99"
+          # The adapter constraint is dev-feat/parity-agent-seam-status-route
+          # (aliased v4.3.1): stamp exactly that dev-* version, because a
+          # real x.y.z stamp cannot satisfy a dev-* constraint.
+          d["version"] = "dev-feat/parity-agent-seam-status-route"
           with open(engine, "w") as f:
               json.dump(d, f, indent=4)
               f.write("\n")

@@ -17,6 +17,9 @@ final class GuardMiddleware
 {
     private readonly ResponseTranslator $translator;
 
+    /** @var array<string, RouteConfig> route patterns sorted most-specific-first */
+    private array $sortedRoutes = [];
+
     /**
      * @param array<string, RouteConfig> $routes route pattern => config,
      *     resolved per request by path match and attached to the engine's
@@ -30,8 +33,6 @@ final class GuardMiddleware
      *     config's geo_ip_handler when that carries one (the config keeps
      *     an injected handler only when country lists are configured)
      */
-    private array $sortedRoutes = [];
-
     public function __construct(
         private readonly GuardEngine $engine,
         private readonly array $routes = [],
