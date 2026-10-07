@@ -688,7 +688,7 @@ $hdrRequest = new LaravelGuardRequest(laravelRequest('/hdr-check', '198.51.100.2
 $plainHeaders = $hdrEngine->responseHeaders();
 $requestHeaders = $hdrEngine->responseHeaders($hdrRequest);
 $t->same($plainHeaders, $requestHeaders, 'the guard request does not change the header set');
-$t->truthy($requestHeaders !== [], 'the default header set is non-empty');
+$t->ok($requestHeaders !== [], 'the default header set is non-empty');
 
 
 $total = $t->passed + $t->failed;
