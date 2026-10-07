@@ -605,10 +605,81 @@ function runRedisIntegration(T $t): void
     $t->same(403, $banned->getStatusCode(), 'engine B blocks the banned ip');
     $t->same('IP address banned', $banned->getContent(), 'ban body exact');
 
+    $t->section('integration: middleware reset clears the distributed rate-limit state');
+    $t->same(200, $middlewareA->handle(laravelRequest('/limited', '192.0.2.77'), (new RecordingNext())->next())->getStatusCode(), 'pre-reset hit 1 passes');
+    $t->same(200, $middlewareA->handle(laravelRequest('/limited', '192.0.2.77'), (new RecordingNext())->next())->getStatusCode(), 'pre-reset hit 2 passes');
+    $t->same(429, $middlewareA->handle(laravelRequest('/limited', '192.0.2.77'), (new RecordingNext())->next())->getStatusCode(), 'pre-reset hit 3 -> 429');
+    $middlewareA->reset();
+    $t->same(200, $middlewareA->handle(laravelRequest('/limited', '192.0.2.77'), (new RecordingNext())->next())->getStatusCode(), 'reset clears the bucket, the ip passes again');
+
     foreach ($redis->keys('*') as $key) {
         $conn->del((string) $key);
     }
 }
+
+// === Parity: agent_stats, refresh_cloud_ip_ranges, method-scoped routes ===
+
+$t->section('agent_stats accessor');
+$noAgentEngine = new GuardEngine(new SecurityConfig(enableRedis: false));
+$noAgentMw = new GuardMiddleware($noAgentEngine);
+$t->same(['enabled' => false, 'degraded' => false], $noAgentMw->agentStats(), 'no handler reports disabled');
+$statsEngine = new GuardEngine(new SecurityConfig(enableRedis: false));
+$statsMw = new GuardMiddleware($statsEngine, agentHandler: new class {
+    public function sendEvent(object $event): void
+    {
+    }
+
+    public function getStats(): array
+    {
+        return ['buffer_size' => 2, 'degraded' => true];
+    }
+});
+$stats = $statsMw->agentStats();
+$t->same(true, $stats['enabled'], 'a handler reports enabled');
+$t->same(2, $stats['buffer_size'], 'the handler stats flow through');
+$bareEngine = new GuardEngine(new SecurityConfig(enableRedis: false));
+$bareMw = new GuardMiddleware($bareEngine, agentHandler: new class {
+    public function sendEvent(object $event): void
+    {
+    }
+});
+$bare = $bareMw->agentStats();
+$t->same(['enabled' => true, 'degraded' => false], $bare, 'a handler without getStats reports the enabled pair only');
+
+$t->section('middleware reset');
+$resetEngine = new GuardEngine(new SecurityConfig(enableRedis: false));
+$resetMw = new GuardMiddleware($resetEngine);
+$resetMw->reset();
+$t->ok(true, 'reset runs without redis (state cleared, no distributed keys to flush)');
+
+$t->section('refresh_cloud_ip_ranges');
+$noCloudEngine = new GuardEngine(new SecurityConfig(enableRedis: false));
+$noCloudMw = new GuardMiddleware($noCloudEngine);
+$noCloudMw->refreshCloudIpRanges();
+$t->ok(true, 'cloud blocking off: refresh is a no-op');
+$cloudEngine = new GuardEngine(
+    new SecurityConfig(enableRedis: false, blockCloudProviders: ['AWS']),
+    cloudManager: new \RenzoFranceschini\GuardCore\Cloud\CloudManager(null, new \RenzoFranceschini\GuardCore\Cloud\InMemoryCloudIpStore())
+);
+$cloudMw = new GuardMiddleware($cloudEngine);
+$cloudMw->refreshCloudIpRanges();
+$t->ok(true, 'cloud blocking on: refresh runs against the store (fetch failures log, never raise)');
+
+$t->section('method-scoped route patterns');
+$mEngine = new GuardEngine(new SecurityConfig(enableRedis: false));
+$mEngine->initialize();
+$getOnly = new RouteConfig(requireHttps: true);
+$anyMethod = new RouteConfig();
+$mMw = new GuardMiddleware($mEngine, routes: ['GET /api' => $getOnly, '/api' => $anyMethod]);
+$mReflect = new ReflectionClass($mMw);
+$mResolve = $mReflect->getMethod('resolveRouteConfig');
+$t->same($getOnly, $mResolve->invoke($mMw, new LaravelGuardRequest(Request::create('/api', 'GET'))), 'the method-scoped pattern wins for GET');
+$t->same($anyMethod, $mResolve->invoke($mMw, new LaravelGuardRequest(Request::create('/api', 'POST'))), 'the bare pattern answers other methods');
+$mixedEngine = new GuardEngine(new SecurityConfig(enableRedis: false));
+$mixedMw = new GuardMiddleware($mixedEngine, routes: ['/api/users' => $anyMethod, 'POST /api' => $getOnly]);
+$mixedResolve = (new ReflectionClass($mixedMw))->getMethod('resolveRouteConfig');
+$t->same($anyMethod, $mixedResolve->invoke($mixedMw, new LaravelGuardRequest(Request::create('/api/users', 'POST'))), 'a longer bare pattern beats a shorter method-scoped one');
+$t->same(null, $mixedResolve->invoke($mixedMw, new LaravelGuardRequest(Request::create('/other', 'GET'))), 'no match attaches nothing');
 
 $total = $t->passed + $t->failed;
 
@@ -633,7 +704,7 @@ $mwP = new GuardMiddleware(
 );
 $reflect = new ReflectionClass($mwP);
 $sorted = $reflect->getProperty('sortedRoutes')->getValue($mwP);
-$t->same(['/api/orders', '/api/'], array_keys($sorted), 'routes sort most-specific-first regardless of insertion order');
+$t->same(['/api/orders', '/api/'], array_map(static fn (array $entry): string => $entry['path'], $sorted), 'routes sort most-specific-first regardless of insertion order');
 $resolve = $reflect->getMethod('resolveRouteConfig');
 $reqP = new LaravelGuardRequest(Request::create('/api/orders'));
 $t->same($specific, $resolve->invoke($mwP, $reqP), 'longest pattern wins for /api/orders');
