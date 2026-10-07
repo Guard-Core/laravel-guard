@@ -4,7 +4,11 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
+<<<<<<< HEAD
     "content-hash": "faac2a4af83e2e56784dcf919404c54a",
+=======
+    "content-hash": "15d0dfce99a12e8262ff66d93237c583",
+>>>>>>> origin/master
     "packages": [
         {
             "name": "carbonphp/carbon-doctrine-types",
@@ -1738,6 +1742,7 @@
         },
         {
             "name": "rennf93/guard-core-php",
+<<<<<<< HEAD
             "version": "v4.3.1",
             "source": {
                 "type": "git",
@@ -1749,6 +1754,13 @@
                 "url": "https://api.github.com/repos/rennf93/guard-core-php/zipball/0c8b0fd7e498ba66a7220aa48060d286930b65c9",
                 "reference": "0c8b0fd7e498ba66a7220aa48060d286930b65c9",
                 "shasum": ""
+=======
+            "version": "dev-feat/parity-agent-seam-status-route",
+            "dist": {
+                "type": "path",
+                "url": "../guard-core-php",
+                "reference": "5047b2c4e8b167f5f1cddd943ab4334f1d7e083b"
+>>>>>>> origin/master
             },
             "require": {
                 "ext-json": "*",
@@ -1770,6 +1782,7 @@
                 "MIT"
             ],
             "description": "PHP port of guard-core: behavioral WAF engine (detection engine conformance milestone)",
+<<<<<<< HEAD
             "support": {
                 "issues": "https://github.com/rennf93/guard-core-php/issues",
                 "source": "https://github.com/rennf93/guard-core-php/tree/v4.3.1"
@@ -1785,6 +1798,11 @@
                 }
             ],
             "time": "2026-10-07T01:25:00+00:00"
+=======
+            "transport-options": {
+                "relative": true
+            }
+>>>>>>> origin/master
         },
         {
             "name": "symfony/clock",
@@ -4182,9 +4200,18 @@
             "time": "2025-11-17T20:03:58+00:00"
         }
     ],
-    "aliases": [],
+    "aliases": [
+        {
+            "package": "rennf93/guard-core-php",
+            "version": "dev-feat/parity-agent-seam-status-route",
+            "alias": "v4.3.1",
+            "alias_normalized": "4.3.1.0"
+        }
+    ],
     "minimum-stability": "dev",
-    "stability-flags": {},
+    "stability-flags": {
+        "rennf93/guard-core-php": 20
+    },
     "prefer-stable": true,
     "prefer-lowest": false,
     "platform": {

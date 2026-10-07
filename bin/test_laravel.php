@@ -611,6 +611,36 @@ function runRedisIntegration(T $t): void
 }
 
 $total = $t->passed + $t->failed;
+
+
+// === Parity: longest-path route config, agent wiring, status controller ===
+$parity = $t;
+
+$engineP = new GuardEngine(new SecurityConfig(enableRedis: false));
+$engineP->initialize();
+$specific = new RouteConfig(rateLimit: 2, rateLimitWindow: 60);
+$general = new RouteConfig();
+$mwP = new GuardMiddleware(
+    $engineP,
+    routes: ['/api/' => $general, '/api/orders' => $specific],
+    agentHandler: new class {
+        public array $events = [];
+        public function sendEvent(object $event): void
+        {
+            $this->events[] = $event;
+        }
+    }
+);
+$reflect = new ReflectionClass($mwP);
+$sorted = $reflect->getProperty('sortedRoutes')->getValue($mwP);
+$t->same(['/api/orders', '/api/'], array_keys($sorted), 'routes sort most-specific-first regardless of insertion order');
+$resolve = $reflect->getMethod('resolveRouteConfig');
+$reqP = new LaravelGuardRequest(Request::create('/api/orders'));
+$t->same($specific, $resolve->invoke($mwP, $reqP), 'longest pattern wins for /api/orders');
+$statusCtl = new \RenzoFranceschini\GuardCoreLaravel\GuardStatusController($engineP);
+$responseP = $statusCtl();
+$payload = json_decode($responseP->getContent(), true);
+$t->same(true, isset($payload['redis']), 'status controller serves initialization status JSON');
 echo "\nPassed: {$t->passed}, Failed: {$t->failed}\n";
 echo "{$t->passed}/{$total}" . ($t->failed === 0 ? ' GREEN' : ' RED') . "\n";
 exit($t->failed === 0 ? 0 : 1);
