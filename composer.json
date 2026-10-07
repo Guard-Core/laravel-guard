@@ -21,17 +21,6 @@
         "test": "php bin/test_laravel.php",
         "lint": "for f in $(find src bin -name '*.php'); do php -l \"$f\" > /dev/null || exit 1; done && echo LINT_OK"
     },
-    "repositories": [
-        {
-            "type": "path",
-            "url": "../guard-core-php",
-            "canonical": false
-        },
-        {
-            "type": "vcs",
-            "url": "https://github.com/rennf93/guard-core-php.git"
-        }
-    ],
     "config": {
         "platform": {
             "php": "8.2.0"
