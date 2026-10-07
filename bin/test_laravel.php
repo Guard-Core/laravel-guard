@@ -681,6 +681,16 @@ $mixedResolve = (new ReflectionClass($mixedMw))->getMethod('resolveRouteConfig')
 $t->same($anyMethod, $mixedResolve->invoke($mixedMw, new LaravelGuardRequest(Request::create('/api/users', 'POST'))), 'a longer bare pattern beats a shorter method-scoped one');
 $t->same(null, $mixedResolve->invoke($mixedMw, new LaravelGuardRequest(Request::create('/other', 'GET'))), 'no match attaches nothing');
 
+$t->section('responseHeaders carries the guard request');
+$hdrEngine = new GuardEngine(new SecurityConfig(enableRedis: false));
+$hdrEngine->initialize();
+$hdrRequest = new LaravelGuardRequest(laravelRequest('/hdr-check', '198.51.100.21'));
+$plainHeaders = $hdrEngine->responseHeaders();
+$requestHeaders = $hdrEngine->responseHeaders($hdrRequest);
+$t->same($plainHeaders, $requestHeaders, 'the guard request does not change the header set');
+$t->truthy($requestHeaders !== [], 'the default header set is non-empty');
+
+
 $total = $t->passed + $t->failed;
 
 
