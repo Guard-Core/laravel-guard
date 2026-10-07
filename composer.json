@@ -5,7 +5,11 @@
     "license": "MIT",
     "require": {
         "php": "^8.2",
+<<<<<<< HEAD
+        "rennf93/guard-core-php": "^4.3.1",
+=======
         "rennf93/guard-core-php": "dev-feat/parity-agent-seam-status-route as v4.3.1",
+>>>>>>> origin/master
         "illuminate/http": "^10.0|^11.0|^12.0",
         "symfony/http-foundation": "^6.4|^7.0"
     },
@@ -21,6 +25,8 @@
         "test": "php bin/test_laravel.php",
         "lint": "for f in $(find src bin -name '*.php'); do php -l \"$f\" > /dev/null || exit 1; done && echo LINT_OK"
     },
+<<<<<<< HEAD
+=======
     "repositories": [
         {
             "type": "path",
@@ -33,6 +39,7 @@
             "canonical": true
         }
     ],
+>>>>>>> origin/master
     "config": {
         "platform": {
             "php": "8.2.0"
