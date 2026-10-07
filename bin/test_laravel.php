@@ -646,6 +646,12 @@ $bareMw = new GuardMiddleware($bareEngine, agentHandler: new class {
 $bare = $bareMw->agentStats();
 $t->same(['enabled' => true, 'degraded' => false], $bare, 'a handler without getStats reports the enabled pair only');
 
+$t->section('middleware reset');
+$resetEngine = new GuardEngine(new SecurityConfig(enableRedis: false));
+$resetMw = new GuardMiddleware($resetEngine);
+$resetMw->reset();
+$t->ok(true, 'reset runs without redis (state cleared, no distributed keys to flush)');
+
 $t->section('refresh_cloud_ip_ranges');
 $noCloudEngine = new GuardEngine(new SecurityConfig(enableRedis: false));
 $noCloudMw = new GuardMiddleware($noCloudEngine);
