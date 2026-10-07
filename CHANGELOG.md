@@ -6,6 +6,9 @@ ___
 v1.4.0 (2026-10-07)
 -------------------
 
+The engine-repin release: guard-core-php ^4.3.1 from packagist plus the longest-path route patterns, optional agent wiring and the JSON status route (v1.4.0)
+-------------------------------------------------------------------------------------------------------------------------------------------------------------
+
 ### Changed
 
 - **Engine constraint repinned to guard-core-php ^4.3.1, the shipped parity release.** `composer.json` floors `rennf93/guard-core-php` at the released `^4.3.1` and `composer.lock` resolves it at v4.3.1 from packagist, replacing the dev-master alias. The CI path-repo plumbing retires with it: the sibling engine checkout, placement and CI-only composer patch steps are gone from ci.yml and static-analysis.yml, so every workflow, local run and example build resolves the engine straight from packagist.
