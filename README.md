@@ -1,8 +1,8 @@
 # laravel-guard
 
-Laravel middleware adapter for [guard-core-php](https://github.com/rennf93/guard-core-php): maps `Illuminate\Http\Request` objects to the guard-core engine and translates block verdicts back to Laravel-native responses. Works with Laravel 10, 11, and 12.
+Laravel middleware adapter for [guard-core-php](https://github.com/Guard-Core/guard-core-php): maps `Illuminate\Http\Request` objects to the guard-core engine and translates block verdicts back to Laravel-native responses. Works with Laravel 10, 11, and 12.
 
-Docs: <https://rennf93.github.io/laravel-guard/>
+Docs: <https://guard-core.github.io/laravel-guard/>
 
 ## Install
 
