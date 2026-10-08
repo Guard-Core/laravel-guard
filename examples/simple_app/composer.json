@@ -12,11 +12,11 @@
     "repositories": [
         {
             "type": "vcs",
-            "url": "https://github.com/rennf93/guard-core-php"
+            "url": "https://github.com/Guard-Core/guard-core-php"
         },
         {
             "type": "vcs",
-            "url": "https://github.com/rennf93/laravel-guard"
+            "url": "https://github.com/Guard-Core/laravel-guard"
         }
     ],
     "minimum-stability": "dev",

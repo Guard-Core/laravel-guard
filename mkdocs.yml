@@ -1,8 +1,8 @@
 site_name: laravel-guard
 site_description: guard-core-php security middleware for PSR-15
 site_author: Renn F
-repo_url: https://github.com/rennf93/laravel-guard
-repo_name: rennf93/laravel-guard
+repo_url: https://github.com/Guard-Core/laravel-guard
+repo_name: Guard-Core/laravel-guard
 
 theme:
   name: material
