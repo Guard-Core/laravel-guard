@@ -712,6 +712,27 @@ $statusCtl = new \RenzoFranceschini\GuardCoreLaravel\GuardStatusController($engi
 $responseP = $statusCtl();
 $payload = json_decode($responseP->getContent(), true);
 $t->same(true, isset($payload['redis']), 'status controller serves initialization status JSON');
+$t->section('decorator handler: the SecurityDecorator family rides the same resolver');
+$decorator = new \RenzoFranceschini\GuardCore\Decorators\SecurityDecorator(new SecurityConfig(enableRedis: false));
+$decorator->requireHeaders(['X-Token' => 'required'])->decorate('GET /admin');
+$decorator->rateLimit(3, 60)->decorate('/throttled');
+$decoratorEngine = new GuardEngine(new SecurityConfig(enableRedis: false));
+$decoratorMw = new GuardMiddleware($decoratorEngine, decoratorHandler: $decorator);
+$t->same($decorator, $decoratorEngine->decoratorHandler(), 'the middleware wires the decorator handler into the engine');
+$noToken = $decoratorMw->handle(laravelRequest('/admin', '203.0.113.160'), static fn ($r) => new \Illuminate\Http\Response('next'));
+$t->same(400, $noToken->getStatusCode(), 'the decorated route enforces its header through the pipeline');
+$withToken = $decoratorMw->handle(laravelRequest('/admin', '203.0.113.160', headers: ['X-Token' => 'required']), static fn ($r) => new \Illuminate\Http\Response('next'));
+$t->same(200, $withToken->getStatusCode(), 'a conforming request passes the decorated route');
+
+$overrideDecorator = new \RenzoFranceschini\GuardCore\Decorators\SecurityDecorator(new SecurityConfig(enableRedis: false));
+$overrideDecorator->requireHttps()->decorate('/mixed');
+$explicit = new RouteConfig(maxRequestSize: 5);
+$overrideMw = new GuardMiddleware(new GuardEngine(new SecurityConfig(enableRedis: false)), routes: ['/mixed' => $explicit], decoratorHandler: $overrideDecorator);
+$overrideResolve = (new ReflectionClass($overrideMw))->getMethod('resolveRouteConfig');
+$t->same($explicit, $overrideResolve->invoke($overrideMw, new LaravelGuardRequest(Request::create('/mixed'))), 'an explicit route map entry wins a shared pattern over the decorator');
+$decoratorResolve = (new ReflectionClass($decoratorMw))->getMethod('resolveRouteConfig');
+$t->same(true, $decoratorResolve->invoke($decoratorMw, new LaravelGuardRequest(Request::create('/throttled', 'POST'))) !== null, 'the decorator route map resolves like a hand-built one');
+
 echo "\nPassed: {$t->passed}, Failed: {$t->failed}\n";
 echo "{$t->passed}/{$total}" . ($t->failed === 0 ? ' GREEN' : ' RED') . "\n";
 exit($t->failed === 0 ? 0 : 1);
