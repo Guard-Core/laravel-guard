@@ -6,12 +6,18 @@
     "require": {
         "php": "^8.2",
         "rennf93/laravel-guard": "dev-master",
-        "rennf93/guard-core-php": "^4.0.4",
+        "rennf93/guard-core-php": "^4.0.4 || dev-master",
         "illuminate/http": "^12.0"
     },
     "repositories": [
-        { "type": "vcs", "url": "https://github.com/rennf93/guard-core-php" },
-        { "type": "vcs", "url": "https://github.com/rennf93/laravel-guard" }
+        {
+            "type": "vcs",
+            "url": "https://github.com/rennf93/guard-core-php"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/rennf93/laravel-guard"
+        }
     ],
     "minimum-stability": "dev",
     "prefer-stable": true,
