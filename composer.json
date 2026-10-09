@@ -5,7 +5,7 @@
     "license": "MIT",
     "require": {
         "php": "^8.2",
-        "rennf93/guard-core-php": "dev-master as 4.3.99",
+        "rennf93/guard-core-php": "^4.3.2",
         "illuminate/http": "^10.0|^11.0|^12.0",
         "symfony/http-foundation": "^6.4|^7.0"
     },
