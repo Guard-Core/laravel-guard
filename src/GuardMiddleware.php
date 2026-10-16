@@ -6,7 +6,7 @@ namespace RenzoFranceschini\GuardCoreLaravel;
 
 use Closure;
 use Illuminate\Http\Request;
-use Illuminate\Http\Response;
+use Symfony\Component\HttpFoundation\Response;
 use RenzoFranceschini\GuardCore\Decorators\SecurityDecorator;
 use RenzoFranceschini\GuardCore\Engine\GuardEngine;
 use RenzoFranceschini\GuardCore\GeoIp\CountryResolver;

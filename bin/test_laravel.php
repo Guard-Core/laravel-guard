@@ -828,6 +828,37 @@ $t->same($explicit, $overrideResolve->invoke($overrideMw, new LaravelGuardReques
 $decoratorResolve = (new ReflectionClass($decoratorMw))->getMethod('resolveRouteConfig');
 $t->same(true, $decoratorResolve->invoke($decoratorMw, new LaravelGuardRequest(Request::create('/throttled', 'POST'))) !== null, 'the decorator route map resolves like a hand-built one');
 
+$t->section('non-Illuminate Response downstream results (JsonResponse, RedirectResponse, StreamedResponse)');
+$nonIlluminate = [
+    'JsonResponse' => static fn () => new \Illuminate\Http\JsonResponse(['ok' => true]),
+    'RedirectResponse' => static fn () => new \Illuminate\Http\RedirectResponse('https://app.test/next'),
+    'StreamedResponse' => static fn () => new \Symfony\Component\HttpFoundation\StreamedResponse(static function (): void {
+        echo 'streamed';
+    }),
+];
+foreach ($nonIlluminate as $kind => $make) {
+    $kindMw = new GuardMiddleware(new GuardEngine(new SecurityConfig(enableRedis: false, enablePenetrationDetection: false)));
+    $kindResult = null;
+    $kindError = null;
+    try {
+        $kindResult = $kindMw->handle(laravelRequest('/kind', '203.0.113.170'), static fn ($r) => $make());
+    } catch (\Throwable $e) {
+        $kindError = $e::class . ': ' . $e->getMessage();
+    }
+    $t->same(null, $kindError, "a downstream {$kind} passes through the middleware without a TypeError");
+    $t->ok($kindResult instanceof \Symfony\Component\HttpFoundation\Response, "the {$kind} comes back as the same Symfony response");
+    $t->same('nosniff', $kindResult?->headers->get('X-Content-Type-Options'), "the engine security headers reach the {$kind}");
+}
+$jsonMod = static function (GuardResponse $r): GuardResponse {
+    $r->headers()->set('X-Modified', 'yes');
+
+    return $r;
+};
+$jsonMw = new GuardMiddleware(new GuardEngine(new SecurityConfig(enableRedis: false, enablePenetrationDetection: false, customResponseModifier: $jsonMod)));
+$jsonOut = $jsonMw->handle(laravelRequest('/kind', '203.0.113.171'), static fn ($r) => new \Illuminate\Http\JsonResponse(['ok' => true]));
+$t->same('yes', $jsonOut->headers->get('X-Modified'), 'the response modifier runs on a JsonResponse');
+
 echo "\nPassed: {$t->passed}, Failed: {$t->failed}\n";
+$total = $t->passed + $t->failed;
 echo "{$t->passed}/{$total}" . ($t->failed === 0 ? ' GREEN' : ' RED') . "\n";
 exit($t->failed === 0 ? 0 : 1);
